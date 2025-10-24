@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Solara 登录</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .login-container {
+      max-width: 400px;
+      width: 100%;
+      margin: 20px;
+    }
+
+    .login-box {
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(10px);
+      padding: 40px;
+      border-radius: 20px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+
+    .logo {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    .logo h1 {
+      color: #4ade80;
+      font-size: 32px;
+      margin-bottom: 10px;
+    }
+
+    .logo p {
+      color: #94a3b8;
+      font-size: 14px;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 25px;
+    }
+
+    .tab {
+      flex: 1;
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.05);
+      border: none;
+      border-radius: 10px;
+      color: #94a3b8;
+      cursor: pointer;
+      transition: all 0.3s;
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .tab.active {
+      background: #4ade80;
+      color: #0f172a;
+    }
+
+    .form-container {
+      display: none;
+    }
+
+    .form-container.active {
+      display: block;
+      animation: fadeIn 0.3s;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 8px;
+      color: #4ade80;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 8px;
+      color: white;
+      font-size: 16px;
+      transition: all 0.3s;
+    }
+
+    .form-group input:focus {
+      outline: none;
+      border-color: #4ade80;
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .form-group input::placeholder {
+      color: #64748b;
+    }
+
+    .submit-btn {
+      width: 100%;
+      padding: 14px;
+      background: #4ade80;
+      color: #0f172a;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .submit-btn:hover {
+      background: #22c55e;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(74, 222, 128, 0.3);
+    }
+
+    .submit-btn:disabled {
+      background: #374151;
+      color: #6b7280;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .message {
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      border: 1px solid;
+      display: none;
+    }
+
+    .error-msg {
+      background: rgba(239, 68, 68, 0.2);
+      color: #ef4444;
+      border-color: #ef4444;
+    }
+
+    .success-msg {
+      background: rgba(74, 222, 128, 0.2);
+      color: #4ade80;
+      border-color: #4ade80;
+    }
+
+    .register-notice {
+      background: rgba(59, 130, 246, 0.2);
+      color: #60a5fa;
+      border: 1px solid #60a5fa;
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      font-size: 14px;
+      display: none;
+    }
+
+    @media (max-width: 480px) {
+      .login-box {
+        padding: 30px 20px;
+      }
+
+      .logo h1 {
+        font-size: 28px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="login-container">
+    <div class="login-box">
+      <div class="logo">
+        <h1>🎵 Solara</h1>
+        <p>音乐播放器</p>
+      </div>
+
+      <div class="tabs">
+        <button class="tab active" onclick="switchForm('login')">登录</button>
+        <button class="tab" onclick="switchForm('register')">注册</button>
+      </div>
+
+      <div id="error-msg" class="message error-msg"></div>
+      <div id="success-msg" class="message success-msg"></div>
+
+      <!-- 登录表单 -->
+      <div id="login-form" class="form-container active">
+        <form onsubmit="handleLogin(event)">
+          <div class="form-group">
+            <label>用户名</label>
+            <input type="text" id="login-username" placeholder="输入用户名" required autocomplete="username">
+          </div>
+          <div class="form-group">
+            <label>密码</label>
+            <input type="password" id="login-password" placeholder="输入密码" required autocomplete="current-password">
+          </div>
+          <button type="submit" class="submit-btn" id="login-btn">登录</button>
+        </form>
+      </div>
+
+      <!-- 注册表单 -->
+      <div id="register-form" class="form-container">
+        <div id="register-notice" class="register-notice">
+          ℹ️ 注册功能可能已关闭，请联系管理员开启。
+        </div>
+        <form onsubmit="handleRegister(event)">
+          <div class="form-group">
+            <label>用户名</label>
+            <input type="text" id="register-username" placeholder="3-20个字符" required autocomplete="username" minlength="3" maxlength="20">
+          </div>
+          <div class="form-group">
+            <label>密码</label>
+            <input type="password" id="register-password" placeholder="至少6个字符" required autocomplete="new-password" minlength="6">
+          </div>
+          <div class="form-group">
+            <label>邮箱（可选）</label>
+            <input type="email" id="register-email" placeholder="your@email.com" autocomplete="email">
+          </div>
+          <button type="submit" class="submit-btn" id="register-btn">注册</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = '/api';
+
+    // 切换表单
+    function switchForm(form) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.form-container').forEach(f => f.classList.remove('active'));
+      
+      event.target.classList.add('active');
+      document.getElementById(`${form}-form`).classList.add('active');
+      
+      // 清空消息
+      hideMessages();
+      
+      // 显示注册提示
+      if (form === 'register') {
+        document.getElementById('register-notice').style.display = 'block';
+      }
+    }
+
+    // 隐藏消息
+    function hideMessages() {
+      document.getElementById('error-msg').style.display = 'none';
+      document.getElementById('success-msg').style.display = 'none';
+    }
+
+    // 显示错误消息
+    function showError(msg) {
+      hideMessages();
+      const errorDiv = document.getElementById('error-msg');
+      errorDiv.textContent = msg;
+      errorDiv.style.display = 'block';
+      setTimeout(() => errorDiv.style.display = 'none', 5000);
+    }
+
+    // 显示成功消息
+    function showSuccess(msg) {
+      hideMessages();
+      const successDiv = document.getElementById('success-msg');
+      successDiv.textContent = msg;
+      successDiv.style.display = 'block';
+    }
+
+    // 处理登录
+    async function handleLogin(e) {
+      e.preventDefault();
+      
+      const username = document.getElementById('login-username').value;
+      const password = document.getElementById('login-password').value;
+      const btn = document.getElementById('login-btn');
+      
+      btn.disabled = true;
+      btn.textContent = '登录中...';
+      
+      try {
+        const response = await fetch(`${API_BASE}/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+
+        const data = await response.json();
+        
+        if (data.success) {
+          localStorage.setItem('solara_token', data.token);
+          localStorage.setItem('solara_user', JSON.stringify(data.user));
+          
+          showSuccess('✅ 登录成功！正在跳转...');
+          
+          setTimeout(() => {
+            window.location.href = '/index.html';
+          }, 1000);
+        } else {
+          showError(data.error || '登录失败');
+          btn.disabled = false;
+          btn.textContent = '登录';
+        }
+      } catch (error) {
+        showError('登录失败：' + error.message);
+        btn.disabled = false;
+        btn.textContent = '登录';
+      }
+    }
+
+    // 处理注册
+    async function handleRegister(e) {
+      e.preventDefault();
+      
+      const username = document.getElementById('register-username').value;
+      const password = document.getElementById('register-password').value;
+      const email = document.getElementById('register-email').value;
+      const btn = document.getElementById('register-btn');
+      
+      // 前端验证
+      if (username.length < 3) {
+        showError('用户名至少3个字符');
+        return;
+      }
+      
+      if (password.length < 6) {
+        showError('密码至少6个字符');
+        return;
+      }
+      
+      btn.disabled = true;
+      btn.textContent = '注册中...';
+      
+      try {
+        const response = await fetch(`${API_BASE}/auth/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password, email })
+        });
+
+        const data = await response.json();
+        
+        if (data.success) {
+          localStorage.setItem('solara_token', data.token);
+          localStorage.setItem('solara_user', JSON.stringify(data.user));
+          
+          showSuccess('✅ 注册成功！正在跳转...');
+          
+          setTimeout(() => {
+            window.location.href = '/index.html';
+          }, 1000);
+        } else {
+          showError(data.error || '注册失败');
+          btn.disabled = false;
+          btn.textContent = '注册';
+        }
+      } catch (error) {
+        showError('注册失败：' + error.message);
+        btn.disabled = false;
+        btn.textContent = '注册';
+      }
+    }
+
+    // 页面加载时检查登录状态
+    window.addEventListener('DOMContentLoaded', async () => {
+      const token = localStorage.getItem('solara_token');
+      
+      if (token) {
+        // 验证 Token 是否有效
+        try {
+          const response = await fetch(`${API_BASE}/auth/verify`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          const data = await response.json();
+          
+          if (data.success) {
+            // Token 有效，直接跳转
+            window.location.href = '/index.html';
+          }
+        } catch (error) {
+          // Token 无效，清除并继续显示登录页
+          localStorage.removeItem('solara_token');
+          localStorage.removeItem('solara_user');
+        }
+      }
+    });
+  </script>
+</body>
+</html>
