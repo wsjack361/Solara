@@ -304,9 +304,14 @@
 
         const data = await response.json();
         
+        console.log('登录响应:', data); // 调试日志
+        
         if (data.success) {
+          // 关键：保存 Token 和用户信息
           localStorage.setItem('solara_token', data.token);
           localStorage.setItem('solara_user', JSON.stringify(data.user));
+          
+          console.log('Token 已保存:', data.token); // 调试日志
           
           showSuccess('✅ 登录成功！正在跳转...');
           
@@ -319,6 +324,7 @@
           btn.textContent = '登录';
         }
       } catch (error) {
+        console.error('登录错误:', error); // 调试日志
         showError('登录失败：' + error.message);
         btn.disabled = false;
         btn.textContent = '登录';
@@ -357,9 +363,14 @@
 
         const data = await response.json();
         
+        console.log('注册响应:', data); // 调试日志
+        
         if (data.success) {
+          // 关键：保存 Token 和用户信息
           localStorage.setItem('solara_token', data.token);
           localStorage.setItem('solara_user', JSON.stringify(data.user));
+          
+          console.log('Token 已保存:', data.token); // 调试日志
           
           showSuccess('✅ 注册成功！正在跳转...');
           
@@ -372,6 +383,7 @@
           btn.textContent = '注册';
         }
       } catch (error) {
+        console.error('注册错误:', error); // 调试日志
         showError('注册失败：' + error.message);
         btn.disabled = false;
         btn.textContent = '注册';
