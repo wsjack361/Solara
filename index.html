@@ -528,5 +528,135 @@ console.log('✅ Solara 云端存储已初始化');
         document.body.appendChild(mobileScript);
     }
 </script>
+<script>
+// ==================== Solara 云端存储补丁脚本 ====================
+(function() {
+  'use strict';
+  
+  console.log('🚀 Solara 云端存储补丁开始加载...');
+  
+  if (typeof CloudStorage === 'undefined') {
+    console.error('❌ CloudStorage 未定义');
+    return;
+  }
+  
+  const originalSavePlayerState = window.savePlayerState;
+  
+  if (typeof originalSavePlayerState === 'function') {
+    window.savePlayerState = async function() {
+      originalSavePlayerState.call(this);
+      
+      try {
+        if (typeof state !== 'undefined') {
+          if (Array.isArray(state.playlistSongs)) {
+            await CloudStorage.savePlaylist(state.playlistSongs);
+          }
+          
+          await CloudStorage.saveSettings({
+            currentTrackIndex: state.currentTrackIndex,
+            playMode: state.playMode,
+            playbackQuality: state.playbackQuality,
+            volume: state.volume,
+            currentPlaylist: state.currentPlaylist,
+            theme: document.body.classList.contains('dark-mode') ? 'dark' : 'light'
+          });
+        }
+      } catch (error) {
+        console.error('❌ 云端保存失败:', error);
+      }
+    };
+    console.log('✅ 已拦截 savePlayerState 函数');
+  }
+  
+  async function restoreFromCloud() {
+    try {
+      console.log('📥 正在从云端恢复数据...');
+      
+      const savedPlaylist = await CloudStorage.getPlaylist();
+      if (savedPlaylist && savedPlaylist.length > 0 && typeof state !== 'undefined') {
+        state.playlistSongs = savedPlaylist;
+        
+        if (typeof renderPlaylist === 'function') {
+          renderPlaylist();
+        }
+        
+        console.log(`✅ 已恢复播放列表: ${savedPlaylist.length} 首歌曲`);
+      }
+      
+      const savedSettings = await CloudStorage.getSettings();
+      if (savedSettings && typeof state !== 'undefined') {
+        if (savedSettings.currentTrackIndex !== undefined) {
+          state.currentTrackIndex = savedSettings.currentTrackIndex;
+        }
+        if (savedSettings.playMode) {
+          state.playMode = savedSettings.playMode;
+          if (typeof updatePlayModeUI === 'function') {
+            updatePlayModeUI();
+          }
+        }
+        if (savedSettings.playbackQuality) {
+          state.playbackQuality = savedSettings.playbackQuality;
+          if (typeof updateQualityLabel === 'function') {
+            updateQualityLabel();
+          }
+        }
+        if (savedSettings.volume !== undefined) {
+          state.volume = savedSettings.volume;
+          const audioPlayer = document.getElementById('audioPlayer');
+          const volumeSlider = document.getElementById('volumeSlider');
+          if (audioPlayer) audioPlayer.volume = savedSettings.volume;
+          if (volumeSlider) volumeSlider.value = savedSettings.volume;
+        }
+        if (savedSettings.theme) {
+          const isDark = savedSettings.theme === 'dark';
+          document.body.classList.toggle('dark-mode', isDark);
+        }
+        
+        console.log('✅ 已恢复用户设置');
+      }
+      
+    } catch (error) {
+      console.error('❌ 从云端恢复数据失败:', error);
+    }
+  }
+  
+  const originalPlaySong = window.playSong;
+  
+  if (typeof originalPlaySong === 'function') {
+    window.playSong = async function(song, options) {
+      const result = await originalPlaySong.call(this, song, options);
+      
+      try {
+        if (song && typeof song === 'object') {
+          await CloudStorage.addHistory({
+            id: song.id,
+            name: song.name,
+            artist: song.artist,
+            album: song.album,
+            timestamp: Date.now()
+          });
+        }
+      } catch (error) {
+        console.error('❌ 保存播放历史失败:', error);
+      }
+      
+      return result;
+    };
+    console.log('✅ 已拦截 playSong 函数');
+  }
+  
+  if (document.readyState === 'complete') {
+    restoreFromCloud();
+  } else {
+    window.addEventListener('load', function() {
+      setTimeout(restoreFromCloud, 500);
+    });
+  }
+  
+  console.log('✅ Solara 云端存储补丁加载完成');
+  
+})();
+</script>
+
 </body>
 </html>
