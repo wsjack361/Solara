@@ -65,6 +65,30 @@
             setViewportUnit();
         })();
     </script>
+    <script>
+    // 登录状态检查
+    (function() {
+      const token = localStorage.getItem('solara_token');
+      if (!token) {
+        window.location.href = '/login.html';
+        return;
+      }
+      fetch('/api/auth/verify', {
+        headers: { 'Authorization': 'Bearer ' + token }
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (!data.success) {
+          localStorage.clear();
+          window.location.href = '/login.html';
+        }
+      })
+      .catch(() => {
+        window.location.href = '/login.html';
+      });
+    })();
+    </script>
+    
 </head>
 <body>
     <div class="background-stage" id="backgroundStage" aria-hidden="true">
@@ -72,6 +96,15 @@
         <div class="background-stage__layer background-stage__layer--transition" id="backgroundTransitionLayer"></div>
     </div>
     <div class="container" id="mainContainer">
+        <div style="position: fixed; top: 15px; right: 15px; z-index: 9999; display: flex; align-items: center; gap: 10px; background: rgba(0, 0, 0, 0.7); padding: 8px 15px; border-radius: 25px; backdrop-filter: blur(10px);">
+            <span style="color: #4ade80; font-weight: 600; font-size: 14px;">
+                👤 <span id="username-display">用户</span>
+            </span>
+            <button onclick="logoutUser()" style="background: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 15px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s;">
+                退出
+            </button>
+        </div>
+        
         <div class="mobile-toolbar" id="mobileToolbar" role="toolbar">
             <button class="mobile-toolbar__button" id="mobileExploreButton" type="button" aria-label="探索雷达">
                 <i class="fas fa-satellite-dish" aria-hidden="true"></i>
@@ -296,6 +329,196 @@
 
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="js/index.js"></script>
+<script>
+// ==================== Upstash 云端存储管理器 ====================
+const CloudStorage = {
+  token: localStorage.getItem('solara_token'),
+  
+  async getPlaylist() {
+    try {
+      const response = await fetch('/api/user/playlist', {
+        headers: { 'Authorization': 'Bearer ' + this.token }
+      });
+      const data = await response.json();
+      if (data.success) {
+        console.log('✅ 从云端加载播放列表');
+        return data.data || [];
+      }
+      return [];
+    } catch (error) {
+      console.error('❌ 获取播放列表失败:', error);
+      return [];
+    }
+  },
+  
+  async savePlaylist(playlist) {
+    try {
+      const response = await fetch('/api/user/playlist', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + this.token,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ playlist: playlist })
+      });
+      const data = await response.json();
+      if (data.success) {
+        console.log('✅ 播放列表已保存到云端');
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('❌ 保存播放列表失败:', error);
+      return false;
+    }
+  },
+  
+  async getSettings() {
+    try {
+      const response = await fetch('/api/user/settings', {
+        headers: { 'Authorization': 'Bearer ' + this.token }
+      });
+      const data = await response.json();
+      if (data.success) {
+        console.log('✅ 从云端加载用户设置');
+        return data.data;
+      }
+      return null;
+    } catch (error) {
+      console.error('❌ 获取设置失败:', error);
+      return null;
+    }
+  },
+  
+  async saveSettings(settings) {
+    try {
+      const response = await fetch('/api/user/settings', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + this.token,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(settings)
+      });
+      const data = await response.json();
+      if (data.success) {
+        console.log('✅ 设置已保存到云端');
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('❌ 保存设置失败:', error);
+      return false;
+    }
+  },
+  
+  async addHistory(song) {
+    try {
+      await fetch('/api/user/history', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + this.token,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ song: song })
+      });
+    } catch (error) {
+      console.error('❌ 保存播放历史失败:', error);
+    }
+  }
+};
+
+// 防抖函数
+function debounce(func, wait) {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+}
+
+// 自动保存（防抖）
+const autoSavePlaylist = debounce(async () => {
+  if (typeof playlist !== 'undefined' && playlist.length > 0) {
+    await CloudStorage.savePlaylist(playlist);
+  }
+}, 2000);
+
+const autoSaveSettings = debounce(async () => {
+  await CloudStorage.saveSettings({
+    theme: document.body.classList.contains('dark') ? 'dark' : 'light',
+    volume: document.getElementById('volumeSlider')?.value || 0.8
+  });
+}, 1000);
+
+// 退出登录
+async function logoutUser() {
+  if (!confirm('确定要退出登录吗？')) return;
+  
+  try {
+    await fetch('/api/auth/logout', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + CloudStorage.token }
+    });
+  } catch (error) {
+    console.error('退出登录失败:', error);
+  }
+  
+  localStorage.clear();
+  window.location.href = '/login.html';
+}
+
+// 页面加载后初始化
+window.addEventListener('load', async function() {
+  // 显示用户名
+  const user = JSON.parse(localStorage.getItem('solara_user') || '{}');
+  const usernameDisplay = document.getElementById('username-display');
+  if (usernameDisplay && user.username) {
+    usernameDisplay.textContent = user.username;
+  }
+  
+  // 从云端加载播放列表
+  try {
+    const savedPlaylist = await CloudStorage.getPlaylist();
+    if (savedPlaylist && savedPlaylist.length > 0) {
+      console.log('📋 从云端恢复播放列表:', savedPlaylist.length, '首歌曲');
+    }
+  } catch (error) {
+    console.error('加载播放列表失败:', error);
+  }
+  
+  // 从云端加载设置
+  try {
+    const settings = await CloudStorage.getSettings();
+    if (settings) {
+      console.log('⚙️ 从云端恢复设置');
+    }
+  } catch (error) {
+    console.error('加载设置失败:', error);
+  }
+});
+
+// 拦截 localStorage 操作
+const originalSetItem = localStorage.setItem;
+localStorage.setItem = function(key, value) {
+  originalSetItem.apply(this, arguments);
+  
+  if (key === 'playlist') {
+    autoSavePlaylist();
+  }
+  
+  if (key === 'theme' || key === 'volume' || key === 'playMode') {
+    autoSaveSettings();
+  }
+};
+
+console.log('✅ Solara 云端存储已初始化');
+</script>
+
 <script>
     if (window.__SOLARA_IS_MOBILE) {
         const mobileScript = document.createElement('script');
