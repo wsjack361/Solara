@@ -1,5 +1,5 @@
 // functions/api/[[route]].js
-// 完全基于 Upstash Redis 的后端 API
+// Solara 用户系统后端 API - 完整版
 
 // ==================== Redis 客户端封装 ====================
 class RedisClient {
@@ -107,6 +107,8 @@ export async function onRequest(context) {
   const url = new URL(request.url);
   const path = url.pathname.replace('/api', '');
   
+  console.log(`[API] ${request.method} ${path}`); // 调试日志
+  
   // CORS 预检请求
   if (request.method === 'OPTIONS') {
     return new Response(null, {
@@ -120,7 +122,14 @@ export async function onRequest(context) {
 
   // 检查环境变量
   if (!env.UPSTASH_URL || !env.UPSTASH_TOKEN) {
-    return jsonResponse({ error: '服务器配置错误：未设置 UPSTASH_URL 和 UPSTASH_TOKEN' }, 500);
+    console.error('[API] 环境变量未配置');
+    return jsonResponse({ 
+      error: '服务器配置错误：未设置 UPSTASH_URL 和 UPSTASH_TOKEN',
+      debug: {
+        hasUrl: !!env.UPSTASH_URL,
+        hasToken: !!env.UPSTASH_TOKEN
+      }
+    }, 500);
   }
 
   const redis = new RedisClient(env.UPSTASH_URL, env.UPSTASH_TOKEN);
@@ -134,11 +143,14 @@ export async function onRequest(context) {
     } else if (path.startsWith('/admin/')) {
       return await handleAdmin(request, redis, path);
     } else {
-      return jsonResponse({ error: '未找到路由' }, 404);
+      return jsonResponse({ error: '未找到路由', path }, 404);
     }
   } catch (error) {
-    console.error('API Error:', error);
-    return jsonResponse({ error: error.message }, 500);
+    console.error('[API] Error:', error);
+    return jsonResponse({ 
+      error: error.message,
+      stack: error.stack 
+    }, 500);
   }
 }
 
@@ -153,6 +165,8 @@ async function handleAuth(request, redis, env, path) {
 
     const body = await request.json();
     const { username, password, email } = body;
+    
+    console.log(`[注册] 用户名: ${username}`);
     
     // 输入验证
     if (!username || !password) {
@@ -175,6 +189,8 @@ async function handleAuth(request, redis, env, path) {
 
     // 创建用户
     const hashedPassword = await hashPassword(password);
+    console.log(`[注册] 密码哈希: ${hashedPassword}`);
+    
     const user = {
       username,
       password: hashedPassword,
@@ -185,11 +201,16 @@ async function handleAuth(request, redis, env, path) {
       status: 'active'
     };
 
-    await redis.set(`users:${username}`, user);
+    const saved = await redis.set(`users:${username}`, user);
+    if (!saved) {
+      return jsonResponse({ error: '保存用户失败' }, 500);
+    }
 
     // 创建会话（7天过期）
     const token = generateToken();
     await redis.set(`session:${token}`, { username, role: user.role }, 604800);
+
+    console.log(`[注册] 成功，Token: ${token.substring(0, 10)}...`);
 
     return jsonResponse({
       success: true,
@@ -207,16 +228,26 @@ async function handleAuth(request, redis, env, path) {
     const body = await request.json();
     const { username, password } = body;
 
+    console.log(`[登录] 尝试登录: ${username}`);
+
     if (!username || !password) {
       return jsonResponse({ error: '用户名和密码不能为空' }, 400);
     }
 
+    // 获取用户数据
     const user = await redis.get(`users:${username}`);
+    console.log(`[登录] 用户存在: ${!!user}`);
+    
     if (!user) {
       return jsonResponse({ error: '用户名或密码错误' }, 401);
     }
 
+    // 验证密码
     const hashedPassword = await hashPassword(password);
+    console.log(`[登录] 输入密码哈希: ${hashedPassword}`);
+    console.log(`[登录] 存储密码哈希: ${user.password}`);
+    console.log(`[登录] 密码匹配: ${user.password === hashedPassword}`);
+    
     if (user.password !== hashedPassword) {
       return jsonResponse({ error: '用户名或密码错误' }, 401);
     }
@@ -232,6 +263,8 @@ async function handleAuth(request, redis, env, path) {
     // 创建会话（7天过期）
     const token = generateToken();
     await redis.set(`session:${token}`, { username, role: user.role }, 604800);
+
+    console.log(`[登录] 成功，Token: ${token.substring(0, 10)}...`);
 
     return jsonResponse({
       success: true,
@@ -249,6 +282,7 @@ async function handleAuth(request, redis, env, path) {
     const token = request.headers.get('Authorization')?.replace('Bearer ', '');
     if (token) {
       await redis.del(`session:${token}`);
+      console.log(`[登出] Token 已删除`);
     }
     return jsonResponse({ success: true });
   }
@@ -256,7 +290,10 @@ async function handleAuth(request, redis, env, path) {
   // 验证Token
   if (path === '/auth/verify') {
     const token = request.headers.get('Authorization')?.replace('Bearer ', '');
+    console.log(`[验证] Token: ${token ? token.substring(0, 10) + '...' : 'null'}`);
+    
     const session = await verifyToken(redis, token);
+    console.log(`[验证] Session 存在: ${!!session}`);
     
     if (!session) {
       return jsonResponse({ error: '未授权，请重新登录' }, 401);
@@ -315,7 +352,6 @@ async function handleUser(request, redis, path) {
     const body = await request.json();
     const history = await redis.get(`users:${username}:history`) || [];
     
-    // 添加到历史记录开头，保留最近100条
     history.unshift({ ...body.song, timestamp: Date.now() });
     if (history.length > 100) history.pop();
     
@@ -358,7 +394,6 @@ async function handleAdmin(request, redis, path) {
     const users = [];
     
     for (const key of userKeys) {
-      // 过滤出用户主数据（排除播放列表、历史等子数据）
       if (!key.includes(':playlist') && !key.includes(':history') && !key.includes(':settings')) {
         const user = await redis.get(key);
         if (user) {
@@ -398,7 +433,6 @@ async function handleAdmin(request, redis, path) {
     const body = await request.json();
     const { username } = body;
     
-    // 删除用户及所有关联数据
     await redis.del(`users:${username}`);
     await redis.del(`users:${username}:playlist`);
     await redis.del(`users:${username}:history`);
