@@ -3,18 +3,30 @@
 
 // ==================== Redis 客户端封装 ====================
 class RedisClient {
-  constructor(url, token) {
-    this.url = url;
-    this.token = token;
-  }
-
   async get(key) {
     try {
       const response = await fetch(`${this.url}/get/${key}`, {
         headers: { 'Authorization': `Bearer ${this.token}` }
       });
       const result = await response.json();
-      return result.result ? JSON.parse(result.result) : null;
+      
+      // ⬇️ 关键：增加调试日志
+      console.log(`[Redis GET] key=${key}, result=`, result);
+      
+      if (!result.result) {
+        console.log(`[Redis GET] 键不存在: ${key}`);
+        return null;
+      }
+      
+      try {
+        const parsed = JSON.parse(result.result);
+        console.log(`[Redis GET] 解析成功:`, parsed);
+        return parsed;
+      } catch (parseError) {
+        console.error(`[Redis GET] JSON 解析失败:`, parseError);
+        console.error(`[Redis GET] 原始数据:`, result.result);
+        return null;
+      }
     } catch (error) {
       console.error('Redis GET error:', error);
       return null;
@@ -26,7 +38,11 @@ class RedisClient {
       const body = { value: JSON.stringify(value) };
       if (ex) body.ex = ex;
       
-      await fetch(`${this.url}/set/${key}`, {
+      // ⬇️ 关键：增加调试日志
+      console.log(`[Redis SET] key=${key}, value=`, value);
+      console.log(`[Redis SET] body=`, body);
+      
+      const response = await fetch(`${this.url}/set/${key}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${this.token}`,
@@ -34,12 +50,17 @@ class RedisClient {
         },
         body: JSON.stringify(body)
       });
+      
+      const result = await response.json();
+      console.log(`[Redis SET] response=`, result);
+      
       return true;
     } catch (error) {
       console.error('Redis SET error:', error);
       return false;
     }
   }
+}
 
   async del(key) {
     try {
